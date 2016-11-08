@@ -34,9 +34,11 @@
 #define AVAILABLE -1
 #define EMPTY 0
 
-
+#define WON_1 1
+#define WON_2 2
+#define TIE 3
 // gameplay
-int search_depth = 10;
+int search_depth = 3;
 int tile_victory_worth = 5;
 int middle_worth = 2;
 struct
@@ -110,45 +112,49 @@ int macro_coords_to_field(int macro_x, int macro_y){
   return macro_y * 27 + macro_x * 3; 
 }
 
-int testWon(int field[], int macro_x, int macro_y, int num){
+
+int getState(int field[], int macro_x, int macro_y){
   // just test all possibilities, there are only 8
-  int x0y0 = field[macro_y * 3 * 9 + macro_x * 3];
-  int x0y1 = field[macro_y * 4 * 9 + macro_x * 3];
-  int x0y2 = field[macro_y * 5 * 9 + macro_x * 3];
-  int x1y0 = field[macro_y * 3 * 9 + macro_x * 3 + 1];
-  int x1y1 = field[macro_y * 4 * 9 + macro_x * 3 + 1];
-  int x1y2 = field[macro_y * 5 * 9 + macro_x * 3 + 1];
-  int x2y0 = field[macro_y * 3 * 9 + macro_x * 3 + 2];
-  int x2y1 = field[macro_y * 4 * 9 + macro_x * 3 + 2];
-  int x2y2 = field[macro_y * 5 * 9 + macro_x * 3 + 2];
+  int x0y0 = field[macro_coords_to_field(macro_x, macro_y)];
+  int x0y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9];
+  int x0y2 = field[macro_coords_to_field(macro_x, macro_y) + 2*9];
+  int x1y0 = field[macro_coords_to_field(macro_x, macro_y) + 1];
+  int x1y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9 + 1];
+  int x1y2 = field[macro_coords_to_field(macro_x, macro_y) + 2*9 + 1];
+  int x2y0 = field[macro_coords_to_field(macro_x, macro_y) + 2];
+  int x2y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9 + 2];
+  int x2y2 = field[macro_coords_to_field(macro_x, macro_y) + 2*9 + 2];
 
-  if (x0y0 == num && x0y1 == num && x0y2 == num){
-    return 1;
+  if (x0y0 != EMPTY && x0y0 == x0y1 && x0y1 == x0y2){
+    return x0y0;
   }
-  if (x1y0 == num && x1y1 == num && x1y2 == num){
-    return 1;
+  if (x1y0 != EMPTY && x1y1 == x1y0 && x1y2 == x1y0){
+    return x1y0;
   }
-  if (x2y0 == num && x2y1 == num && x2y2 == num){
-    return 1;
-  }
-
-  if (x0y0 == num && x1y0 == num && x2y0 == num){
-    return 1;
-  }
-  if (x0y1 == num && x1y1 == num && x2y1 == num){
-    return 1;
-  }
-  if (x0y2 == num && x1y2 == num && x2y2 == num){
-    return 1;
-  }
-  if (x0y0 == num && x1y1 == num && x2y2 == num){
-    return 1;
-  }
-  if (x2y0 == num && x1y1 == num && x0y2 == num){
-    return 1;
+  if (x2y0 != EMPTY && x2y1 == x2y0 && x2y2 == x2y0){
+    return x2y0;
   }
 
-  return 0;
+  if (x0y0 != EMPTY && x1y0 == x0y0 && x2y0 == x0y0){
+    return x0y0;
+  }
+  if (x0y1 != EMPTY && x1y1 == x0y1 && x2y1 == x0y1){
+    return x0y1;
+  }
+  if (x0y2 != EMPTY && x1y2 == x0y2 && x2y2 == x0y2){
+    return x0y2;
+  }
+  if (x0y0 != EMPTY && x1y1 == x0y0 && x2y2 == x0y0){
+    return x0y0;
+  }
+  if (x2y0 != EMPTY && x1y1 == x2y0 && x0y2 == x2y0){
+    return x2y0;
+  }
+
+  if (x0y0 != EMPTY && x0y1 != EMPTY && x0y2 != EMPTY && x1y0 != EMPTY && x1y1 != EMPTY && x1y2 != EMPTY && x2y0 != EMPTY && x2y1 != EMPTY && x2y2 != EMPTY){
+    return TIE;
+  }
+  return EMPTY;
 }
 
 int macro_coords_to_int(int x, int y){
@@ -161,13 +167,14 @@ int all_macro_coords_to_int(int m_x, int m_y, int x, int y){
 
 
 int estimate_value_single(int field[], int x, int y, int myNum){
-  int i_won = testWon(field, x, y, myNum);
-  if (i_won)
-    return tile_victory_worth;
-  int he_won = testWon(field, x, y, myNum == 3 - myNum);
-  if (he_won)
-    return -tile_victory_worth;
+  int state = getState(field, x, y);
 
+  if (state == myNum)
+    return tile_victory_worth;
+  if (state == 3 - myNum)
+    return -tile_victory_worth;
+  if (state == TIE)
+    return 0;
   if (field[macro_coords_to_field(x,y) + 10] == myNum){
     return middle_worth;
   }
@@ -186,7 +193,9 @@ int estimate_value_all(table curr_board, int myNum){
   int total = 0;
   for (i = 0; i < 3; i++){
     for (j = 0; j < 3; j++){
-      total += estimate_value_single(curr_board.field, i, j, myNum);
+      int res = estimate_value_single(curr_board.field, i, j, myNum);
+    
+      total += res;
     }
   }
   return total;
@@ -194,12 +203,13 @@ int estimate_value_all(table curr_board, int myNum){
 
 
 void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player){
+
   curr_board->field[all_macro_coords_to_int(m_x, m_y, x, y)] = player;
 
   int i = 0;
   int j = 0;
 
-  if (testWon(curr_board->field, m_x, m_y, 1) || testWon(curr_board->field, m_x, m_y, 2)){
+  if (getState(curr_board->field, m_x, m_y) != EMPTY){
     curr_board->macro[macro_coords_to_int(m_x, m_y)] = FINISHED;
     for (i = 0; i < 3; i++){
       for (j = 0; j < 3; j++){
@@ -215,8 +225,8 @@ void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player)
         curr_board->macro[macro_coords_to_int(i,j)] = UNAVAILABLE;
       }      
     }
+    curr_board->macro[macro_coords_to_int(m_x, m_y)] = AVAILABLE;
   }
-  curr_board->macro[macro_coords_to_int(m_x, m_y)] = AVAILABLE;
 }
 
 
@@ -232,6 +242,9 @@ move recursive_search_min_max(table curr_board, int remaining_depth, int turn, i
   for (m_x = 0; m_x < 3; m_x++){
     for (m_y = 0; m_y < 3; m_y++){
       if (curr_board.macro[macro_coords_to_int(m_x, m_y)] == AVAILABLE){
+        #ifdef DEBUG
+        printf("\ndetermined m_x:%d m_y:%d is available", m_x, m_y);
+        #endif
         for (x = 0; x < 3; x++){
           for (y = 0; y < 3; y++){
             // check not taken already
@@ -239,6 +252,7 @@ move recursive_search_min_max(table curr_board, int remaining_depth, int turn, i
               table new_board = curr_board;
               update_table(&new_board, m_x, m_y, x, y, turn);
               move found = recursive_search(new_board, remaining_depth-1, 3 - turn, myNum);
+              //printf("%d %d move value: %d\n" + x,y,found.value);
               if (turn == myNum){
                 if (found.value > chosen_move.value){
                   chosen_move.value = found.value;
@@ -263,72 +277,14 @@ move recursive_search_min_max(table curr_board, int remaining_depth, int turn, i
 
 move recursive_search(table curr_board, int remaining_depth, int turn, int myNum){
   if (remaining_depth == 0){
-    move a = {0, 0, estimate_value_all(curr_board, myNum)};
+    int res = estimate_value_all(curr_board, myNum);
+     //printf("%d\n", res);
+
+    move a = {0, 0, res };
     return a;
   }
   move chosen_move = recursive_search_min_max(curr_board, remaining_depth, turn, myNum);
   return chosen_move;
-}
-
-void random_action(char *action, char *value){
-  if (!strcmp(action, "move"))
-  {
-    int count = 0;
-    int x = 0, y = 0;
-    int i = 0;
-    for (i = 0; i < 9; i++)
-    {
-      if (board.macro[i] == -1)
-      {
-        int j;
-        for (j = 0; j < 9; j++)
-        {
-          if (board.field[i * 9 + j] == 0)
-          {
-            count++;
-          }
-        }
-      }
-    }
-
-    int pick = rand() % count;
-    #ifdef DEBUG
-    fprintf(stderr, "available moves: %d pick: %d\n", count, pick);
-    #endif
-
-    count = -1;
-    for (i = 0; i < 9; i++)
-    {
-      if (board.macro[i] == -1)
-      {
-        int j;
-        for (j = 0; j < 9; j++)
-        {
-          if (board.field[i * 9 + j] == 0)
-          {
-            if (++count == pick)
-            {
-              x = ((i % 3) * 3) + (j % 3);
-              y = ((i / 3) * 3) + (j / 3);
-            }
-          }
-        }
-      }
-    }
-
-    // place_move 1 1 // places an O (for player 1) in the middle small square of
-    //                   the top-left big square
-    fprintf(stdout, "place_move %d %d\n", x, y);
-    #ifdef DEBUG
-    fprintf(stderr, "place_move %d %d\n", x, y);
-    #endif
-  }
-  #ifdef DEBUG
-  else
-  {
-    fprintf(stderr, "unknown action: [%s: %s]\n", action, value);
-  }
-  #endif
 }
 
 
