@@ -42,7 +42,7 @@
 #define MAX(a,b) ((a) > (b) ? a : b);
 #define MIN(a,b) ((a) < (b) ? a : b);
 // gameplay
-int search_depth = 7;
+int search_depth = 8;
 int tile_victory_worth = 20;
 
 int worths[] = {2,1,2,1,3,1,2,1,2};
@@ -238,6 +238,13 @@ int estimate_value_all(table *curr_board){
   if ((res[2] == WON_1 || res[2] == WON_2) && res[5] == res[2] && res[8] == res[2]){
     return (res[2] == game_settings.botid) ? 100000 : -100000;
   }
+  //diagonals
+  if ((res[0] == WON_1 || res[0] == WON_2) && res[4] == res[0] && res[8] == res[0]){
+    return (res[0] == game_settings.botid) ? 100000 : -100000;
+  }
+  if ((res[2] == WON_1 || res[2] == WON_2) && res[4] == res[2] && res[6] == res[2]){
+    return (res[2] == game_settings.botid) ? 100000 : -100000;
+  }
 
 
   // regular heuristic
@@ -279,9 +286,9 @@ void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player)
 }
 }
 
-move recursive_search(table curr_board, int remaining_depth, int turn, int alpha, int beta){
+move recursive_search(table *curr_board, int remaining_depth, int turn, int alpha, int beta){
   if (remaining_depth == 0){
-    int res = estimate_value_all(&curr_board);
+    int res = estimate_value_all(curr_board);
      //printf("%d\n", res);
     move a;
     a.x = 0;
@@ -306,16 +313,16 @@ move recursive_search(table curr_board, int remaining_depth, int turn, int alpha
     //printf("level %d\n", remaining_depth);
     for (m_x = 0; m_x < 3; m_x++){
       for (m_y = 0; m_y < 3; m_y++){
-        if (curr_board.macro[macro_coords_to_int(m_x, m_y)] == AVAILABLE){
+        if (curr_board->macro[macro_coords_to_int(m_x, m_y)] == AVAILABLE){
           for (x = 0; x < 3; x++){
             for (y = 0; y < 3; y++){
             // check not taken already
-              if (curr_board.field[all_coords_to_int(m_x, m_y, x, y)] == EMPTY){
+              if (curr_board->field[all_coords_to_int(m_x, m_y, x, y)] == EMPTY){
                 table new_board;
-                memcpy(new_board.macro, curr_board.macro, sizeof(curr_board.macro));
-                memcpy(new_board.field, curr_board.field, sizeof(curr_board.field));
+                memcpy(new_board.macro, curr_board->macro, sizeof(curr_board->macro));
+                memcpy(new_board.field, curr_board->field, sizeof(curr_board->field));
                 update_table(&new_board, m_x, m_y, x, y, turn);
-                move found = recursive_search(new_board, remaining_depth-1, 3 - turn, alpha, beta);
+                move found = recursive_search(&new_board, remaining_depth-1, 3 - turn, alpha, beta);
                 int recieved = found.value;
                // printf("ME %d %d %d\n", x, y, recieved);
 
@@ -344,17 +351,17 @@ move recursive_search(table curr_board, int remaining_depth, int turn, int alpha
     int v = INT_MAX;  
     for (m_x = 0; m_x < 3; m_x++){
       for (m_y = 0; m_y < 3; m_y++){
-        if (curr_board.macro[macro_coords_to_int(m_x, m_y)] == AVAILABLE){
+        if (curr_board->macro[macro_coords_to_int(m_x, m_y)] == AVAILABLE){
           for (x = 0; x < 3; x++){
             for (y = 0; y < 3; y++){
             // check not taken already
-              if (curr_board.field[all_coords_to_int(m_x, m_y, x, y)] == EMPTY){
+              if (curr_board->field[all_coords_to_int(m_x, m_y, x, y)] == EMPTY){
                 table new_board;
-                memcpy(new_board.macro, curr_board.macro, sizeof(curr_board.macro));
+                memcpy(new_board.macro, curr_board->macro, sizeof(curr_board->macro));
                 //printf("%u\n", sizeof(new_board.macro));
-                memcpy(new_board.field, curr_board.field, sizeof(curr_board.field));
+                memcpy(new_board.field, curr_board->field, sizeof(curr_board->field));
                 update_table(&new_board, m_x, m_y, x, y, turn);
-                move found = recursive_search(new_board, remaining_depth-1, 3 - turn, alpha, beta);
+                move found = recursive_search(&new_board, remaining_depth-1, 3 - turn, alpha, beta);
                 int recieved = found.value;
                 //free(found);
                 //printf("move value HIM: %d\n", recieved);
@@ -384,7 +391,7 @@ void action(char *action, char *value)
   assert(action != NULL);
   assert(value != NULL);
 
-  move m = recursive_search(board, search_depth, game_settings.botid, INT_MIN, INT_MAX);
+  move m = recursive_search(&board, search_depth, game_settings.botid, INT_MIN, INT_MAX);
 
   int x = m.x;
   int y = m.y;
