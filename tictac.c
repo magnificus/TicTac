@@ -42,7 +42,7 @@
 #define MAX(a,b) ((a) > (b) ? a : b);
 #define MIN(a,b) ((a) < (b) ? a : b);
 // gameplay
-int search_depth = 10;
+int search_depth = 8;
 int tile_victory_worth = 15;
 int two_in_row_worth = 5;
 int middle_worth = 3;
@@ -295,15 +295,18 @@ move recursive_search(table curr_board, int remaining_depth, int turn, int myNum
                 update_table(&new_board, m_x, m_y, x, y, turn);
                 move found = recursive_search(new_board, remaining_depth-1, 3 - turn, myNum, alpha, beta);
                 int recieved = found.value;
-                //printf("move value ME: %d \n",recieved);
+                //printf("NOT %d %d %d\n", x, y, recieved);
+
                 if (recieved > v){
                   //printf("found better\n");
                   chosen_move = found;
+                   //printf("%d %d %d\n", x, y, recieved);
+
                   chosen_move.x = m_x * 3 + x;
                   chosen_move.y = m_y * 3 + y;
                   v = recieved;
                   alpha = MAX(alpha, v);
-                  if (beta >= alpha){
+                  if (beta <= alpha){
                     return chosen_move;
                   } 
                 }
