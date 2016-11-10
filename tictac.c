@@ -42,7 +42,7 @@
 #define MAX(a,b) ((a) > (b) ? a : b);
 #define MIN(a,b) ((a) < (b) ? a : b);
 // gameplay
-int search_depth = 8;
+int search_depth = 9;
 int tile_victory_worth = 20;
 
 int worths[] = {2,1,2,1,3,1,2,1,2};
@@ -169,7 +169,7 @@ int macro_coords_to_int(int x, int y){
 }
 
 int all_coords_to_int(int m_x, int m_y, int x, int y){
-  return m_x * 3 + m_y * 3 * 9 + x + y * 9;
+  return m_x * 3 + m_y * 27 + x + y * 9;
 }
 
 
@@ -289,24 +289,25 @@ void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player)
 move recursive_search(table *curr_board, int remaining_depth, int turn, int alpha, int beta){
   if (remaining_depth == 0){
     int res = estimate_value_all(curr_board);
-     //printf("%d\n", res);
-    move a;
-    a.x = 0;
-    a.y = 0;
-    a.value = res;
-    //if (res > 1000 || res < -1000){
-    //  printf("BAZINGA\n");
-    //} else{
-    //  printf("Node value: %d\n", res);
-    //}
+    move a = {0,0,res};
     return a;
   }
+
+  //if (remaining_depth % 2 == 0){
+   //potentially abandon
+   //int res = estimate_value_all(curr_board);
+   //if (res < 0){
+     //move a = {0, 0, res};
+     //return a;
+   //}
+ //}
 
   int x = 0;
   int y = 0;
   
   int m_x = 0;
   int m_y = 0;
+  int oldMacro[9];
   if (turn == game_settings.botid){
     move chosen_move;
     int v = INT_MIN;
@@ -318,19 +319,17 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
             for (y = 0; y < 3; y++){
             // check not taken already
               if (curr_board->field[all_coords_to_int(m_x, m_y, x, y)] == EMPTY){
-                table new_board;
-                memcpy(new_board.macro, curr_board->macro, sizeof(curr_board->macro));
-                memcpy(new_board.field, curr_board->field, sizeof(curr_board->field));
-                update_table(&new_board, m_x, m_y, x, y, turn);
-                move found = recursive_search(&new_board, remaining_depth-1, 3 - turn, alpha, beta);
+                memcpy(oldMacro, curr_board->macro, sizeof(curr_board->macro));
+                update_table(curr_board, m_x, m_y, x, y, turn);
+                move found = recursive_search(curr_board, remaining_depth-1, 3 - turn, alpha, beta);
                 int recieved = found.value;
-               // printf("ME %d %d %d\n", x, y, recieved);
+                curr_board->field[all_coords_to_int(m_x, m_y, x, y)] = EMPTY;
+                memcpy(curr_board->macro, oldMacro, sizeof(oldMacro));
+
+                //printf("ME %d %d %d\n", x, y, recieved);
 
                 if (recieved > v){
-                  //printf("found better\n");
                   chosen_move = found;
-                   //printf("%d %d %d\n", x, y, recieved);
-
                   chosen_move.x = m_x * 3 + x;
                   chosen_move.y = m_y * 3 + y;
                   v = recieved;
@@ -356,14 +355,12 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
             for (y = 0; y < 3; y++){
             // check not taken already
               if (curr_board->field[all_coords_to_int(m_x, m_y, x, y)] == EMPTY){
-                table new_board;
-                memcpy(new_board.macro, curr_board->macro, sizeof(curr_board->macro));
-                //printf("%u\n", sizeof(new_board.macro));
-                memcpy(new_board.field, curr_board->field, sizeof(curr_board->field));
-                update_table(&new_board, m_x, m_y, x, y, turn);
-                move found = recursive_search(&new_board, remaining_depth-1, 3 - turn, alpha, beta);
+                memcpy(oldMacro, curr_board->macro, sizeof(curr_board->macro));
+                update_table(curr_board, m_x, m_y, x, y, turn);
+                move found = recursive_search(curr_board, remaining_depth-1, 3 - turn, alpha, beta);
                 int recieved = found.value;
-                //free(found);
+                curr_board->field[all_coords_to_int(m_x, m_y, x, y)] = EMPTY;
+                memcpy(curr_board->macro, oldMacro, sizeof(oldMacro));
                 //printf("move value HIM: %d\n", recieved);
                 if (recieved < v){
                   v = recieved;
