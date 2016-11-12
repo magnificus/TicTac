@@ -28,6 +28,7 @@
 #include <string.h>
 #include <time.h>
 #include <limits.h>
+#include <time.h>
 
 #define MAX_LINE_LENGTH 255
 #define FINISHED -10
@@ -41,11 +42,16 @@
 
 #define MAX(a,b) ((a) > (b) ? a : b);
 #define MIN(a,b) ((a) < (b) ? a : b);
-// gameplay
-int search_depth = 9;
-int tile_victory_worth = 20;
 
-int worths[] = {2,1,2,1,3,1,2,1,2};
+#define GENERATE_DATA_ONLY 1
+// gameplay
+int search_depth = 11;
+int tile_victory_worth = 40;
+int prev_timebank = 0;
+
+
+
+int worths[] = {3,2,3,2,4,2,3,2,3};
 
 struct
 {
@@ -70,10 +76,21 @@ typedef struct move
 } move;
 
 
+typedef struct precomputed_solution
+{
+  int field[9*9];
+  int x;
+  int y;
+} precomputed_solution;
+
+
+precomputed_solution* precomputed_solutions;
+
 void settings(char *, char *);
 void update(char *, char *, char *);
 void action(char *, char *);
-//move recursive_search(table curr_board, int remaining_depth, int turn, int myNum, int alpha, int beta);
+
+void load_precomputed();
 
 int main(int argc, char const *argv[])
 {
@@ -115,9 +132,20 @@ int main(int argc, char const *argv[])
 }
 
 
+void get_tile(int m_x, int m_y, int *field, int* tiles){
+  tiles[0] = field[macro_coords_to_field(m_x, m_y)];
+  tiles[1] = field[macro_coords_to_field(m_x, m_y) + 1];
+  tiles[2] = field[macro_coords_to_field(m_x, m_y) + 2];
+  tiles[3] = field[macro_coords_to_field(m_x, m_y) + 9];
+  tiles[4] = field[macro_coords_to_field(m_x, m_y) + 9 + 1];
+  tiles[5] = field[macro_coords_to_field(m_x, m_y) + 9 + 2];
+  tiles[6] = field[macro_coords_to_field(m_x, m_y) + 18];
+  tiles[7] = field[macro_coords_to_field(m_x, m_y) + 18 + 1];
+  tiles[8] = field[macro_coords_to_field(m_x, m_y) + 18 + 2];
+}
 
 
-int getState(int field[], int macro_x, int macro_y){
+int getState(int* field, int macro_x, int macro_y){
   // just test all possibilities, there are only 8
   int x0y0 = field[macro_coords_to_field(macro_x, macro_y)];
   int x0y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9];
@@ -172,37 +200,57 @@ int all_coords_to_int(int m_x, int m_y, int x, int y){
   return m_x * 3 + m_y * 27 + x + y * 9;
 }
 
-
-int estimate_value_single(int field[], int x, int y){
-  int state = getState(field, x, y);
-
-  if (state == game_settings.botid)
-    return tile_victory_worth;
-  if (state == 3 - game_settings.botid){
-    return - tile_victory_worth;
+int get_state(int field[]){
+  if (field[0] != EMPTY && field[0] == field[3] && field[0] == field[6]){
+    return field[0];
   }
-  if (state == TIE)
-    return 0;
+  if (field[1] != EMPTY && field[4] == field[1] && field[7] == field[1]){
+    return field[1];
+  }
+  if (field[2] != EMPTY && field[5] == field[2] && field[8] == field[2]){
+    return field[2];
+  }
+  if (field[0] != EMPTY && field[1] == field[0] && field[2] == field[0]){
+    return field[0];
+  }
+  if (field[3] != EMPTY && field[4] == field[3] && field[5] == field[3]){
+    return field[3];
+  }
+  if (field[6] != EMPTY && field[7] == field[6] && field[8] == field[6]){
+    return field[6];
+  }
+  if (field[0] != EMPTY && field[4] == field[0] && field[8] == field[0]){
+    return field[0];
+  }
+  if (field[2] != EMPTY && field[4] == field[2] && field[6] == field[2]){
+    return field[2];
+  }
+  if (field[0] != EMPTY && field[1] != EMPTY && field[2] != EMPTY && field[3] != EMPTY && field[4] != EMPTY && field[5] != EMPTY && field[6] != EMPTY && field[7] != EMPTY && field[8] != EMPTY){
+    return TIE;
+  }
+  return EMPTY;
+}
+
+int estimate_value_single_heuristic(int *field, int x, int y, int state){
 
   // no clear winner, time for heuristics
-  int totalVal = 0;
-  int i = 0;
-  int j = 0;
+ int totalVal = 0;
+ int i = 0;
+ int j = 0;
 
   // worths for individual tiles
-  for (i = 0; i < 3; i++){
-    for (j = 0; j < 3; j++){
-      int state = field[all_coords_to_int(x,y,i,j)];
-      if (state != EMPTY){
-          int factor = (game_settings.botid == state) ? 1 : -1;
-          totalVal += worths[i + j*3] * factor;
-      }
-
+ for (i = 0; i < 3; i++){
+  for (j = 0; j < 3; j++){
+    int state = field[all_coords_to_int(x,y,i,j)];
+    if (state != EMPTY){
+      int factor = (game_settings.botid == state) ? 1 : -1;
+      totalVal += worths[i + j*3] * factor;
     }
-  }
 
-  // worths for 
-  return totalVal;
+  }
+}
+
+return totalVal;
 }
 
 
@@ -210,51 +258,49 @@ int estimate_value_single(int field[], int x, int y){
 int estimate_value_all(table *curr_board){
   int i = 0;
   int j = 0;
-
   int res[9];
 
+
+  int* tileArray = calloc(9, sizeof(int));
   for (i = 0; i < 3; i++){
     for (j = 0; j < 3; j++){
-      res[i+j*3] = getState(curr_board->field, i, j);
+      get_tile(i, j, curr_board->field, tileArray);
+      res[i+j*3] = get_state(tileArray);
+      //res[i+j*3] = getState(curr_board->field, i, j);
     }
   }
+  free(tileArray);
 
   //check victory
-  if ((res[0] == WON_1 || res[0] == WON_2) && res[1] == res[0] && res[2] == res[0]){
-    return (res[0] == game_settings.botid) ? 100000 : -100000;
+  int win_state = get_state(curr_board->macro);
+  if (win_state == WON_1){
+    return 1000000;
   }
-  if ((res[3] == WON_1 || res[3] == WON_2) && res[4] == res[3] && res[5] == res[3]){
-    return (res[3] == game_settings.botid) ? 100000 : -100000;
+  else if (win_state == WON_2){
+    return -100000;
   }
-  if ((res[6] == WON_1 || res[6] == WON_2) && res[7] == res[6] && res[8] == res[6]){
-    return (res[6] == game_settings.botid) ? 100000 : -100000;
+
+  // ordinary heuristic
+  else{
+    int total = 0;
+    for (i = 0; i < 3; i++){
+      for (j = 0; j < 3; j++){
+        int state = res[macro_coords_to_int(i, j)];
+        if (state == game_settings.botid)
+          total += tile_victory_worth;
+        else if (state == 3 - game_settings.botid)
+          total -= tile_victory_worth;
+        else if (state != TIE)
+          total += estimate_value_single_heuristic(curr_board->field, i, j, state) * worths[macro_coords_to_int(i, j)];     
+      }
+    }
+    return total;
   }
-  if ((res[0] == WON_1 || res[0] == WON_2) && res[3] == res[0] && res[6] == res[0]){
-    return (res[0] == game_settings.botid) ? 100000 : -100000;
-  }
-  if ((res[1] == WON_1 || res[1] == WON_2) && res[4] == res[1] && res[7] == res[1]){
-    return (res[1] == game_settings.botid) ? 100000 : -100000;
-  }
-  if ((res[2] == WON_1 || res[2] == WON_2) && res[5] == res[2] && res[8] == res[2]){
-    return (res[2] == game_settings.botid) ? 100000 : -100000;
-  }
-  //diagonals
-  if ((res[0] == WON_1 || res[0] == WON_2) && res[4] == res[0] && res[8] == res[0]){
-    return (res[0] == game_settings.botid) ? 100000 : -100000;
-  }
-  if ((res[2] == WON_1 || res[2] == WON_2) && res[4] == res[2] && res[6] == res[2]){
-    return (res[2] == game_settings.botid) ? 100000 : -100000;
-  }
+
 
 
   // regular heuristic
-  int total = 0;
-  for (i = 0; i < 3; i++){
-    for (j = 0; j < 3; j++){
-      total += estimate_value_single(curr_board->field, i, j) * worths[i + j*3];
-    }
-  }
-  return total;
+
 }
 
 
@@ -265,6 +311,7 @@ void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player)
   int i = 0;
   int j = 0;
 
+  //if (getState(curr_board->field, x, y) != EMPTY){
   if (getState(curr_board->field, x, y) != EMPTY){
     curr_board->macro[macro_coords_to_int(x, y)] = FINISHED;
     for (i = 0; i < 3; i++){
@@ -293,25 +340,15 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
     return a;
   }
 
-  //if (remaining_depth % 2 == 0){
-   //potentially abandon
-   //int res = estimate_value_all(curr_board);
-   //if (res < 0){
-     //move a = {0, 0, res};
-     //return a;
-   //}
- //}
-
   int x = 0;
   int y = 0;
   
   int m_x = 0;
   int m_y = 0;
   int oldMacro[9];
+  move chosen_move;
   if (turn == game_settings.botid){
-    move chosen_move;
     int v = INT_MIN;
-    //printf("level %d\n", remaining_depth);
     for (m_x = 0; m_x < 3; m_x++){
       for (m_y = 0; m_y < 3; m_y++){
         if (curr_board->macro[macro_coords_to_int(m_x, m_y)] == AVAILABLE){
@@ -329,24 +366,23 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
                 //printf("ME %d %d %d\n", x, y, recieved);
 
                 if (recieved > v){
-                  chosen_move = found;
+                  chosen_move.value = recieved;
                   chosen_move.x = m_x * 3 + x;
                   chosen_move.y = m_y * 3 + y;
                   v = recieved;
                   alpha = MAX(alpha, v);
                   if (beta <= alpha)
                     return chosen_move;
-                  } 
-                }
+                } 
               }
             }
           }
         }
       }
+    }
     return chosen_move;
   }
   else{
-    move chosen_move;
     int v = INT_MAX;  
     for (m_x = 0; m_x < 3; m_x++){
       for (m_y = 0; m_y < 3; m_y++){
@@ -364,7 +400,6 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
                 //printf("move value HIM: %d\n", recieved);
                 if (recieved < v){
                   v = recieved;
-                  //chosen_move = found;
                   chosen_move.value = recieved;
                   chosen_move.x = m_x * 3 + x;
                   chosen_move.y = m_y * 3 + y;
@@ -379,7 +414,7 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
       }
     }
     return chosen_move;
-}
+  }
 }
 
 
@@ -388,7 +423,21 @@ void action(char *action, char *value)
   assert(action != NULL);
   assert(value != NULL);
 
+  game_settings.timebank = atoi(value);
+  //printf("timebank: %d", game_settings.timebank);
+  if (game_settings.timebank < prev_timebank){
+    search_depth--;
+  } else if (game_settings.timebank == 10000 && prev_timebank == 10000){
+    search_depth = MIN(search_depth+1, 9);
+  }
+
+  prev_timebank = game_settings.timebank;
+
+  //clock_t begin = clock();
   move m = recursive_search(&board, search_depth, game_settings.botid, INT_MIN, INT_MAX);
+  //clock_t end = clock();
+  //double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+  //printf("time spent: %lf\n", time_spent);
 
   int x = m.x;
   int y = m.y;
@@ -478,9 +527,6 @@ void settings(char *setting, char *value)
   if (!strcmp(setting, "timebank"))
   {
     game_settings.timebank = atoi(value);
-    #ifdef DEBUG
-    fprintf(stderr, "settings timebank: %d\n", game_settings.timebank);
-    #endif
     return;
   }
   // settings time_per_move 500
@@ -515,4 +561,9 @@ void settings(char *setting, char *value)
   #ifdef DEBUG
   fprintf(stderr, "unknown setting: [%s: %s]\n", setting, value);
   #endif
+}
+
+void load_precomputed(){
+  precomputed_solutions = calloc(81, sizeof(precomputed_solution));
+  precomputed_solutionsre
 }
