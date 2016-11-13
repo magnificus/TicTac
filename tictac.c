@@ -43,12 +43,14 @@
 #define MAX(a,b) ((a) > (b) ? a : b);
 #define MIN(a,b) ((a) < (b) ? a : b);
 
-#define GENERATE_DATA_ONLY 1
+
+#define PRECOMPUTED_LENGTH 729;
+
+#define GENERATE_DATA_ONLY 0
 // gameplay
-int search_depth = 11;
+int search_depth = 9;
 int tile_victory_worth = 40;
 int prev_timebank = 0;
-
 
 
 int worths[] = {3,2,3,2,4,2,3,2,3};
@@ -95,7 +97,7 @@ void load_precomputed();
 int main(int argc, char const *argv[])
 {
   char line[MAX_LINE_LENGTH];
-  char part[3][MAX_LINE_LENGTH];
+  char part[4][MAX_LINE_LENGTH];
 
   #ifdef DEBUG
   freopen("test.in", "r", stdin);
@@ -108,7 +110,8 @@ int main(int argc, char const *argv[])
       sscanf(&line[7], "%s %s", part[0], part[1]);
       action(part[0], part[1]);
       fflush(stdout);
-      continue;
+      continue;   
+
     }
     if (!strncmp(line, "update ", 7))
     {
@@ -249,11 +252,8 @@ int estimate_value_single_heuristic(int *field, int x, int y, int state){
 
   }
 }
-
 return totalVal;
 }
-
-
 
 int estimate_value_all(table *curr_board){
   int i = 0;
@@ -273,10 +273,10 @@ int estimate_value_all(table *curr_board){
 
   //check victory
   int win_state = get_state(curr_board->macro);
-  if (win_state == WON_1){
+  if (win_state == game_settings.botid){
     return 1000000;
   }
-  else if (win_state == WON_2){
+  else if (win_state == (3 - game_settings.botid)){
     return -100000;
   }
 
@@ -333,8 +333,11 @@ void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player)
 }
 }
 
+
+clock_t begin;
 move recursive_search(table *curr_board, int remaining_depth, int turn, int alpha, int beta){
-  if (remaining_depth == 0){
+  int win_state = get_state(curr_board->macro);
+  if (remaining_depth == 0 || (((double)(clock() - begin) / CLOCKS_PER_SEC) > (game_settings.timebank) / 2000) || win_state == WON_1 || win_state == WON_2){
     int res = estimate_value_all(curr_board);
     move a = {0,0,res};
     return a;
@@ -380,7 +383,14 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
         }
       }
     }
-    return chosen_move;
+    if (v == INT_MIN){
+      // no child nodes
+      int res = estimate_value_all(curr_board);
+      move a = {0,0,res};
+      return a;
+    } else{
+      return chosen_move;
+    }
   }
   else{
     int v = INT_MAX;  
@@ -413,30 +423,46 @@ move recursive_search(table *curr_board, int remaining_depth, int turn, int alph
         }
       }
     }
+    if (v == INT_MAX){
+      // no child nodes
+      int res = estimate_value_all(curr_board);
+      move a = {0,0,res};
+      return a;
+    } else{
+      return chosen_move;
+    }
     return chosen_move;
   }
 }
 
 
+void print_field(int *field, int len){
+  int i = 0;
+  for (i = 0; i < len; i++){
+    printf("%d,", field[i]);
+  }
+}
+
+
+int curr_num;
 void action(char *action, char *value)
 {
   assert(action != NULL);
   assert(value != NULL);
 
   game_settings.timebank = atoi(value);
-  //printf("timebank: %d", game_settings.timebank);
   if (game_settings.timebank < prev_timebank){
     search_depth--;
   } else if (game_settings.timebank == 10000 && prev_timebank == 10000){
-    search_depth = MIN(search_depth+1, 9);
+    search_depth = MIN(search_depth+1, 10);
   }
 
   prev_timebank = game_settings.timebank;
 
-  //clock_t begin = clock();
+  begin = clock();
   move m = recursive_search(&board, search_depth, game_settings.botid, INT_MIN, INT_MAX);
-  //clock_t end = clock();
-  //double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+  clock_t end = clock();
+  double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
   //printf("time spent: %lf\n", time_spent);
 
   int x = m.x;
@@ -478,16 +504,6 @@ void update(char *game, char *update, char *value)
       &board.macro[5], &board.macro[6], &board.macro[7], &board.macro[8]);
     return;
   }
-  // update game field  0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0,
-  //                    0,0,0,0,0,0,0,0,0
-  // no new lines and no spaces after the commas
   if (!strcmp(update, "field"))
   {
     sscanf(value,                   
@@ -563,7 +579,34 @@ void settings(char *setting, char *value)
   #endif
 }
 
+
+
+
+
+
+
+
+
+/// experimental
+void flip_field(int* field){
+  int i;
+  for (i = 0; i < 81; i++){
+    if (field[i] == 1 || field[i] == 2){
+      field[i] = 3 - field[i];
+    }
+  }
+}
+
 void load_precomputed(){
-  precomputed_solutions = calloc(81, sizeof(precomputed_solution));
-  precomputed_solutionsre
+  precomputed_solutions = calloc(729, sizeof(precomputed_solution));
+  //precomputed_solutions[0]
+}
+
+precomputed_solution check_precomputed(int *field){
+  int i = 0; 
+  for (i = 0; i < 729; i++){
+    if (memcmp(precomputed_solutions[i].field, field, 81) == 0){
+      return precomputed_solutions[i];
+    }
+  }
 }
