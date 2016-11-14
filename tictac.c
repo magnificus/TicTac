@@ -149,46 +149,52 @@ void get_tile(int m_x, int m_y, int *field, int* tiles){
 
 
 int getState(int* field, int macro_x, int macro_y){
+
   // just test all possibilities, there are only 8
-  int x0y0 = field[macro_coords_to_field(macro_x, macro_y)];
-  int x0y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9];
-  int x0y2 = field[macro_coords_to_field(macro_x, macro_y) + 2*9];
-  int x1y0 = field[macro_coords_to_field(macro_x, macro_y) + 1];
-  int x1y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9 + 1];
-  int x1y2 = field[macro_coords_to_field(macro_x, macro_y) + 2*9 + 1];
-  int x2y0 = field[macro_coords_to_field(macro_x, macro_y) + 2];
-  int x2y1 = field[macro_coords_to_field(macro_x, macro_y) + 1*9 + 2];
-  int x2y2 = field[macro_coords_to_field(macro_x, macro_y) + 2*9 + 2];
+  int m_field = macro_coords_to_field(macro_x, macro_y);
+  int res[9];
+  res[0] = field[m_field];
+  res[3] = field[m_field + 1*9];
+  res[6] = field[m_field + 2*9];
+  res[1] = field[m_field+ 1];
+  res[4] = field[m_field + 1*9 + 1];
+  res[7] = field[m_field + 2*9 + 1];
+  res[2] = field[m_field + 2];
+  res[5] = field[m_field + 1*9 + 2];
+  res[8] = field[m_field + 2*9 + 2];
 
-  if (x0y0 != EMPTY && x0y0 == x0y1 && x0y1 == x0y2){
-    return x0y0;
+  if (res[0] != EMPTY && res[0] == res[3] && res[3] == res[6]){
+    return res[0];
   }
-  if (x1y0 != EMPTY && x1y1 == x1y0 && x1y2 == x1y0){
-    return x1y0;
+  if (res[1] != EMPTY && res[4] == res[1] && res[7] == res[1]){
+    return res[1];
   }
-  if (x2y0 != EMPTY && x2y1 == x2y0 && x2y2 == x2y0){
-    return x2y0;
+  if (res[2] != EMPTY && res[5] == res[2] && res[8] == res[2]){
+    return res[2];
   }
-  if (x0y0 != EMPTY && x1y0 == x0y0 && x2y0 == x0y0){
-    return x0y0;
+  if (res[0] != EMPTY && res[1] == res[0] && res[2] == res[0]){
+    return res[0];
   }
-  if (x0y1 != EMPTY && x1y1 == x0y1 && x2y1 == x0y1){
-    return x0y1;
+  if (res[3] != EMPTY && res[4] == res[3] && res[5] == res[3]){
+    return res[3];
   }
-  if (x0y2 != EMPTY && x1y2 == x0y2 && x2y2 == x0y2){
-    return x0y2;
+  if (res[6] != EMPTY && res[7] == res[6] && res[8] == res[6]){
+    return res[6];
   }
-  if (x0y0 != EMPTY && x1y1 == x0y0 && x2y2 == x0y0){
-    return x0y0;
+  if (res[0] != EMPTY && res[4] == res[0] && res[8] == res[0]){
+    return res[0];
   }
-  if (x2y0 != EMPTY && x1y1 == x2y0 && x0y2 == x2y0){
-    return x2y0;
+  if (res[2] != EMPTY && res[4] == res[2] && res[6] == res[2]){
+    return res[2];
   }
 
-  if (x0y0 != EMPTY && x0y1 != EMPTY && x0y2 != EMPTY && x1y0 != EMPTY && x1y1 != EMPTY && x1y2 != EMPTY && x2y0 != EMPTY && x2y1 != EMPTY && x2y2 != EMPTY){
-    return TIE;
+  for (int i = 0; i < 9; i++){
+    if (res[i] == EMPTY){
+      return EMPTY;
+
+    }
   }
-  return EMPTY;
+  return TIE;
 }
 
 int macro_coords_to_field(int macro_x, int macro_y){
@@ -228,10 +234,13 @@ int get_state(int field[]){
   if (field[2] != EMPTY && field[4] == field[2] && field[6] == field[2]){
     return field[2];
   }
-  if (field[0] != EMPTY && field[1] != EMPTY && field[2] != EMPTY && field[3] != EMPTY && field[4] != EMPTY && field[5] != EMPTY && field[6] != EMPTY && field[7] != EMPTY && field[8] != EMPTY){
-    return TIE;
+
+  for (int i = 0; i < 9; i++){
+    if (i == EMPTY){
+      return EMPTY;
+    }
   }
-  return EMPTY;
+  return TIE;
 }
 
 int estimate_value_single_heuristic(int *field, int x, int y, int state){
@@ -254,6 +263,8 @@ int estimate_value_single_heuristic(int *field, int x, int y, int state){
 }
 return totalVal;
 }
+
+
 
 int estimate_value_all(table *curr_board){
   int i = 0;
@@ -311,7 +322,6 @@ void update_table(table *curr_board, int m_x, int m_y, int x, int y, int player)
   int i = 0;
   int j = 0;
 
-  //if (getState(curr_board->field, x, y) != EMPTY){
   if (getState(curr_board->field, x, y) != EMPTY){
     curr_board->macro[macro_coords_to_int(x, y)] = FINISHED;
     for (i = 0; i < 3; i++){
